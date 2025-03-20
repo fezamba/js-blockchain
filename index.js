@@ -1,14 +1,12 @@
 import express from 'express';
 import crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
+import { URL } from "url";
 import axios from 'axios';
-import { timeStamp } from 'console';
 
 const app = express();
 app.use(express.json());
 
 const port = 3000;
-
 class Blockchain {
     constructor() {
         this.chain = [];
@@ -78,15 +76,48 @@ class Blockchain {
     }
 
     addTransaction(sender, receiver, amount) {
+        this.transactions.push({ sender, receiver, amount });
+        const previousBlock = this.getPreviousBlock();
+        return previousBlock.index + 1;
     }
 
     addNode(address) {
+        try {
+            const parsedUrl = new URL(address);
+            this.nodes.add(`${parsedUrl.hostname}:${parsedUrl.port}`);
+        } catch (error) {
+            console.error("Invalid address:", address);
+        }
     }
 
-    replaceChain() {
+    async replaceChain() {
+        const network = this.nodes;
+        let longestChain = null;
+        let maxLength = this.chain.length;
+
+        for (const node of network) {
+            try {
+                const response = await axios.get(`http://${node}/get_chain`);
+                const data = response.data;
+                if (response.data) {
+                    const length = data.length;
+                    const chain = data.chain;
+
+                    if (length > maxLength && this.isChainValid(chain)) {
+                        maxLength = length;
+                        longestChain = chain;
+                    }
+                }
+            } catch (error) {
+                console.error(`Erro ao acessar o nó ${node}:`, error);
+            }
+        }
+
+        if (longestChain) {
+            this.chain = longestChain;
+            return true;
+        }
+        return false;
     }
 }
-
-/*
-const id = uuidv4();
-console.log(`UUID Gerado: ${id}`);*/
+const blockchain = new Blockchain();
